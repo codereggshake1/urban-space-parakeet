@@ -170,7 +170,7 @@ const startPredictionLoop = () => {
       
       <div className="door-display">
         <img 
-          src={doorState === 'closed' ? '/closed.jpg' : '/open.jpg'} 
+          src={doorState === 'closed' ? `${window.location.origin}/closed.jpg` : `${window.location.origin}/open.jpg`} 
           alt={`${doorState} door`} 
           className="door-image" 
         />
