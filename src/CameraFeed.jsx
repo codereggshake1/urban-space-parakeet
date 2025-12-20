@@ -152,7 +152,7 @@ const startPredictionLoop = () => {
 
   return (
     <div className="camera-container">
-      <h1>Camera Feed</h1>
+      <h1>Start the camera</h1>
       
       {modelOutput && (
         <div className="model-output">
@@ -212,7 +212,8 @@ const startPredictionLoop = () => {
       <p className="status">
         {isActive ? '🟢 Camera is running' : '⚪ Camera is off'}
       </p>
-      {modelLoaded && <p className="status model-status">✓ Model loaded</p>}
+      <p className="status"> Open your hand 🖐️ </p>
+
     </div>
   );
 }
