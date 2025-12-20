@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
-import * as tmImage from '@teachablemachine/image';
 import './CameraFeed.css';
 
 function CameraFeed() {
@@ -18,10 +17,14 @@ function CameraFeed() {
     // Load the model
     const loadModel = async () => {
       try {
-        const URL = window.location.origin + '/';
-        const modelURL = URL + 'model.json';
-        const metadataURL = URL + 'metadata.json';
-        modelRef.current = await tmImage.load(modelURL, metadataURL);
+        // Optional but recommended
+        await tf.setBackend('webgl');
+        await tf.ready();
+
+        const modelURL = `${window.location.origin}/model/model.json`;
+
+        modelRef.current = await tf.loadLayersModel(modelURL);
+        console.log('Loading model from:', modelURL);
         setModelLoaded(true);
       } catch (err) {
         console.error('Error loading model:', err);
@@ -65,69 +68,76 @@ function CameraFeed() {
       setIsActive(false);
     }
   };
+  
+const startPredictionLoop = () => {
+  let lastPredictionTime = 0;
+  const predictionDelay = 100;
 
-  const startPredictionLoop = () => {
-    let lastPredictionTime = 0;
-    const predictionDelay = 100; // milliseconds between predictions
-    
-    const predict = async () => {
-      const now = Date.now();
-      
-      if (videoRef.current && modelRef.current && (now - lastPredictionTime) > predictionDelay) {
-        try {
-          // Check if video is ready
-          if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-            const predictions = await modelRef.current.predict(videoRef.current);
-            
-            // Convert to array if needed
-            const predArray = Array.isArray(predictions) ? predictions : Object.values(predictions);
-            
-            console.log('Raw predictions:', predictions);
-            console.log('Predictions array:', predArray);
-            
-            if (predArray && predArray.length > 0) {
-              // Get the prediction with highest probability
-              let maxProb = 0;
-              let maxIndex = 0;
-              let maxPred = null;
-              
-              predArray.forEach((pred, index) => {
-                if (pred.probability > maxProb) {
-                  maxProb = pred.probability;
-                  maxIndex = index;
-                  maxPred = pred;
-                }
-              });
+  const predict = async () => {
+    const now = Date.now();
 
-              // Class 1 (index 0) = closed (output 1), Class 2 (index 1) = open (output 0)
-              const output = maxIndex === 0 ? 0 : 1;
-              const outputData = {
-                output,
-                confidence: (maxProb * 100).toFixed(1),
-                class: maxPred ? maxPred.className : 'Unknown'
-              };
-              
-              // Log to console
-              console.log('Model Prediction:', outputData);
-              
-              setModelOutput(outputData);
+    if (
+      videoRef.current &&
+      modelRef.current &&
+      now - lastPredictionTime > predictionDelay
+    ) {
+      try {
+        if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+          // 1. Capture frame → tensor
+          const inputTensor = tf.browser
+            .fromPixels(videoRef.current)
+            .resizeNearestNeighbor([224, 224]) // TM default
+            .toFloat()
+            .div(255.0)
+            .expandDims(0); // [1, 224, 224, 3]
 
-              // Update door state based on model output
-              setDoorState(output === 0 ? 'open' : 'closed');
+          // 2. Run inference
+          const predictionTensor = modelRef.current.predict(inputTensor);
+
+          // 3. Read results
+          const probabilities = await predictionTensor.data();
+
+          // 4. Cleanup
+          inputTensor.dispose();
+          predictionTensor.dispose();
+
+          // 5. Find max probability
+          let maxProb = 0;
+          let maxIndex = 0;
+
+          probabilities.forEach((prob, index) => {
+            if (prob > maxProb) {
+              maxProb = prob;
+              maxIndex = index;
             }
-            
-            lastPredictionTime = now;
-          }
-        } catch (err) {
-          console.error('Prediction error:', err);
+          });
+
+          // Define your labels manually (order matters!)
+          const labels = ['closed', 'open'];
+
+          const outputData = {
+            output: maxIndex === 0 ? 0 : 1,
+            confidence: (maxProb * 100).toFixed(1),
+            class: labels[maxIndex] ?? 'Unknown'
+          };
+
+          console.log('Model Prediction:', outputData);
+
+          setModelOutput(outputData);
+          setDoorState(outputData.output === 0 ? 'open' : 'closed');
+
+          lastPredictionTime = now;
         }
+      } catch (err) {
+        console.error('Prediction error:', err);
       }
+    }
 
-      predictionLoopRef.current = requestAnimationFrame(predict);
-    };
-
-    predict();
+    predictionLoopRef.current = requestAnimationFrame(predict);
   };
+
+  predict();
+};
 
   const stopCamera = () => {
     if (streamRef.current) {
