@@ -130,7 +130,7 @@ const startPredictionLoop = () => {
 
           setModelOutput(outputData);
           setDoorState(outputData.output === 0 ? 'open' : 'closed');
-          recentPredictions.push(outputData.output);
+          recentPredictions.push(1 - outputData.output);
           if (recentPredictions.length > maxRecentPredictions) {
             recentPredictions.shift();
           }
@@ -141,12 +141,12 @@ const startPredictionLoop = () => {
               let majority = null
               let maxCount = 0
 
-              if (predictions.length === 0) {
+              if (recentPredictions.length === 0) {
                 majority = -1;
               } else {
                   const counts = {}
 
-                  for (const p of predictions) {
+                  for (const p of recentPredictions) {
                     counts[p] = (counts[p] || 0) + 1
                   }
 
@@ -158,6 +158,7 @@ const startPredictionLoop = () => {
                   }
 
               }
+              console.log(`Last ${maxRecentPredictions} predictions:`, recentPredictions);
 
             try {
                const response = await fetch(API_URL, {
