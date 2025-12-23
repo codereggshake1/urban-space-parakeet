@@ -12,6 +12,8 @@ function CameraFeed() {
   const streamRef = useRef(null);
   const modelRef = useRef(null);
   const predictionLoopRef = useRef(null);
+  const recentPredictions = [];
+  const API_URL = "https://roblox-door.codereggshake1.workers.dev/"
 
   useEffect(() => {
     // Load the model
@@ -72,6 +74,9 @@ function CameraFeed() {
 const startPredictionLoop = () => {
   let lastPredictionTime = 0;
   const predictionDelay = 100;
+  let lastPostTime = 0;
+  const postDelay = 1000;
+  const maxRecentPredictions = 20;
 
   const predict = async () => {
     const now = Date.now();
@@ -125,6 +130,55 @@ const startPredictionLoop = () => {
 
           setModelOutput(outputData);
           setDoorState(outputData.output === 0 ? 'open' : 'closed');
+          recentPredictions.push(outputData.output);
+          if (recentPredictions.length > maxRecentPredictions) {
+            recentPredictions.shift();
+          }
+          
+          if (now - lastPostTime > postDelay) {
+            lastPostTime = now;
+
+              let majority = null
+              let maxCount = 0
+
+              if (predictions.length === 0) {
+                majority = -1;
+              } else {
+                  const counts = {}
+
+                  for (const p of predictions) {
+                    counts[p] = (counts[p] || 0) + 1
+                  }
+
+                  for (const [value, count] of Object.entries(counts)) {
+                    if (count > maxCount) {
+                      maxCount = count
+                      majority = value
+                    }
+                  }
+
+              }
+
+            try {
+               const response = await fetch(API_URL, {
+                method: 'POST', 
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ open: majority }),
+              });
+
+              if (!response.ok) {
+                throw new Error('Network response was not ok');
+              }
+
+              console.log('Prediction posted successfully');
+
+            } catch (error) {
+              console.error('Failed to post prediction:', error);
+            }
+           
+          }
 
           lastPredictionTime = now;
         }
